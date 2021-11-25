@@ -1,12 +1,12 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
+-- Company: Blackstock Designs
+-- Engineer: George Henry
 -- 
 -- Create Date: 11/24/2021 02:39:24 PM
 -- Design Name: 
 -- Module Name: SixBitArith - Behavioral
 -- Project Name: 
--- Target Devices: 
+-- Target Devices: Digilent Basys3
 -- Tool Versions: 
 -- Description: 
 -- 
@@ -15,6 +15,8 @@
 -- Revision:
 -- Revision 0.01 - File Created
 -- Additional Comments:
+-- Code for controling the seven segment display based on 
+-- https://www.fpga4student.com/2017/09/vhdl-code-for-seven-segment-display.html
 -- 
 ----------------------------------------------------------------------------------
 
@@ -33,12 +35,12 @@ use IEEE.std_logic_arith.all;
 --use UNISIM.VComponents.all;
 
 entity SixBitArith is
-    Port ( sw : in std_logic_vector(15 downto 0);
-         led : out std_logic_vector(15 downto 0);
-         btnL, btnR: in std_logic;
+    Port ( sw : in std_logic_vector(15 downto 0); -- switches on the Basys 3
+         led : out std_logic_vector(15 downto 0); -- leds on the Baysy 3
+         btnL, btnR: in std_logic; -- left and right buttons on the Basys 3
          clock_100Mhz : in STD_LOGIC;-- 100Mhz clock on Basys 3 FPGA board           
          Anode_Activate : out STD_LOGIC_VECTOR (3 downto 0);-- 4 Anode signals
-         LED_out : out STD_LOGIC_VECTOR (6 downto 0));
+         LED_out : out STD_LOGIC_VECTOR (6 downto 0)); -- seven segment display on the Basys 3
 end SixBitArith;
 
 architecture Behavioral of SixBitArith is
@@ -57,6 +59,7 @@ architecture Behavioral of SixBitArith is
     signal opeationChoice: std_logic_vector(2 downto 0);
     signal intNum1, intNum2, output, orNum, xorNum, andNum: integer :=0;
 begin
+    -- assign the leds on the board to light up when the coressponding switch is on
     led(0) <= sw(0);
     led(1) <= sw(1);
     led(2) <= sw(2);
@@ -74,6 +77,7 @@ begin
     led(14) <= sw(14);
     led(15) <= sw(15);
 
+    -- the leftmost 6 switches are the first number
     num1(0) <= sw(0);
     num1(1) <= sw(1);
     num1(2) <= sw(2);
@@ -81,6 +85,7 @@ begin
     num1(4) <= sw(4);
     num1(5) <= sw(5);
 
+    -- the next 6 switches are the second number
     num2(0) <= sw(6);
     num2(1) <= sw(7);
     num2(2) <= sw(8);
@@ -88,42 +93,56 @@ begin
     num2(4) <= sw(10);
     num2(5) <= sw(11);
 
+    -- the three rightmost switches control the operation to perform on the numbers 
+    -- 000 add 
+    -- 001 subtract num2 - num1
+    -- 010 multiply 
+    -- 011 or 
+    -- 100 xor 
+    -- 101 and 
+    -- 110 num2 > num1 ?
+    -- 111 num2 < num1 ?
     opeationChoice(0) <= sw(13);
     opeationChoice(1) <= sw(14);
     opeationChoice(2) <= sw(15);
 
+    -- convert from binary to signed integer
     intNum1 <= conv_integer(num1);
     intNum2 <= CONV_INTEGER(num2);
 
+    -- the only way I found to make this give the correct results is to perform the logic operations here ...
     orVal <= num2 or num1;
     xorVal <= num2 xor num1;
     andVal <= num2 and num1;
-    
+    -- and then convert to signed integers right after. When I did this within the case statement below, it would pad the numbers to 
+    -- 8 bits. This led to no negative numbers  
     orNum <= conv_integer(orVal);
     xorNum <= conv_integer(xorVal);
     andNum <= conv_integer(andVal);
 
-    --output <= intNum1 + intNum2;
     process(opeationChoice, btnL, btnR)
     begin
-        case opeationChoice is
-            when "000" => output <= intNum2 + intNum1;
-            when "001" => output <= intNum2 - intNum1;
-            when "010" => output <= intNum1 * intNum2;
-            --            when "011" => output <= conv_integer( (num2 or num1) or "1100_0000");
-            --            when "100" => output <= conv_integer(num2 xor num1);
-            --            when "101" => output <= conv_integer(num2 and num1);
-            when "011" => output <= orNum;
-            when "100" => output <= xorNum;
-            when "101" => output <= andNum;
-            when "110" => if intNum2 > intNum1 then output <= 1; else output <= 0; end if;
-            when "111" => if intNum2 < intNum1 then output <= 1; else output <= 0; end if;
-        end case;
         if(btnL = '1') then
+        -- holding down the left button will display the value of num2 as an integer
             output <= intNum2;
-        end if;
-        if(btnR = '1') then
+        elsif(btnR = '1') then
+        -- holding down the right button will display the value of num1 as an integer
             output <= intNum1;
+        else
+        -- show the result of the chosen operation
+            case opeationChoice is
+                when "000" => output <= intNum2 + intNum1;
+                when "001" => output <= intNum2 - intNum1;
+                when "010" => output <= intNum1 * intNum2;
+                --            when "011" => output <= conv_integer(num2 or num1);
+                --            when "100" => output <= conv_integer(num2 xor num1);
+                --            when "101" => output <= conv_integer(num2 and num1);
+                when "011" => output <= orNum;
+                when "100" => output <= xorNum;
+                when "101" => output <= andNum;
+                when "110" => if intNum2 > intNum1 then output <= 1; else output <= 0; end if;
+                when "111" => if intNum2 < intNum1 then output <= 1; else output <= 0; end if;
+            end case;
         end if;
     end process;
 
@@ -175,15 +194,15 @@ begin
                 Anode_Activate <= "0111";
                 -- activate LED1 and Deactivate LED2, LED3, LED4
                 if output < 0 then
-                    LED_BCD <= "10001";
+                    LED_BCD <= "10001"; -- put in the negative sign
                 else
-                    LED_BCD <= "10000";
+                    LED_BCD <= "10000"; -- leave blank
                 end if;
             when "01" =>
                 Anode_Activate <= "1011";
                 -- activate LED2 and Deactivate LED1, LED3, LED4
                 posVal := abs(output);
-                hundred := posVal/100;
+                hundred := posVal/100; -- get the hundreds digit
                 outVal := CONV_STD_LOGIC_VECTOR(hundred,5);
                 LED_BCD <= outVal;
             when "10" =>
